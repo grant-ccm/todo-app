@@ -52,14 +52,16 @@ const sortedTodos = computed(() =>
   titleSort.value === "none"
     ? filteredTodos.value
     : filteredTodos.value.toSorted((a, b) => {
+        const aText = a.todoName.toLowerCase();
+        const bText = b.todoName.toLowerCase();
         if (
-          (a.todoName > b.todoName && titleSort.value === "asc") ||
-          (a.todoName < b.todoName && titleSort.value === "desc")
+          (aText > bText && titleSort.value === "asc") ||
+          (aText < bText && titleSort.value === "desc")
         ) {
           return 1;
         } else if (
-          (a.todoName < b.todoName && titleSort.value === "asc") ||
-          (a.todoName > b.todoName && titleSort.value === "desc")
+          (aText < bText && titleSort.value === "asc") ||
+          (aText > bText && titleSort.value === "desc")
         ) {
           return -1;
         } else return 0;
@@ -136,14 +138,7 @@ onMounted(() => {
     </tr>
     <tr class="todo-container" v-for="todo in sortedTodos" :key="todo._id">
       <td class="name-container">
-        <input
-          v-if="editingTodo && editingTodo._id === todo._id"
-          type="text"
-          v-model="editingTodo.todoName"
-        />
-        <span v-else>
-          {{ todo.todoName }}
-        </span>
+        {{ todo.todoName }}
       </td>
       <td class="complete-container">
         <template v-if="editingTodo && editingTodo._id === todo._id">
@@ -192,6 +187,7 @@ onMounted(() => {
     <tr v-if="addingTodo !== null">
       <td class="name-container">
         <input
+          class="name-input"
           type="text"
           placeholder="New Todo title..."
           v-model="addingTodo"
@@ -266,7 +262,7 @@ td {
   display: flex;
 }
 
-tr input {
+.name-input {
   width: 80%;
 }
 </style>
