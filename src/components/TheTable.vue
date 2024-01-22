@@ -3,6 +3,7 @@ import { Ref, computed, onMounted, ref } from "vue";
 import { BASE_URL, Todo } from "../main";
 import axios from "axios";
 import { useRouter } from "vue-router";
+import TheLoader from "./TheLoader.vue";
 
 const props = defineProps<{
   titleFilter: string;
@@ -12,6 +13,7 @@ const props = defineProps<{
 const router = useRouter();
 
 const todos = ref<Todo[]>([]);
+const status = ref<"" | "loading" | "deleting">("loading");
 
 const titleSort: Ref<"none" | "asc" | "desc"> = ref("none");
 const titleSortIcon = computed(() =>
@@ -52,34 +54,47 @@ const sortedTodos = computed(() =>
 );
 
 async function getTodos() {
+  const response = await axios.get(BASE_URL);
+  return response.data.data;
+}
+
+async function deleteTodo(id: string) {
+  await axios.delete(`${BASE_URL}/${id}`);
+}
+
+async function handleDeleteClick(id: string) {
+  status.value = "deleting";
   try {
-    const response = await axios.get(BASE_URL);
-    todos.value = response.data.data;
+    await deleteTodo(id);
+    const response = await getTodos();
+    todos.value = response;
   } catch (error) {
     console.log(error);
+  } finally {
+    status.value = "";
   }
 }
 
-async function deleteTodo(todoId: string) {
+onMounted(async () => {
   try {
-    await axios.delete(`${BASE_URL}/${todoId}`);
-    await getTodos();
+    const response = await getTodos();
+    todos.value = response;
   } catch (error) {
     console.log(error);
+  } finally {
+    status.value = "";
   }
-}
-
-onMounted(() => {
-  getTodos();
 });
 </script>
 
 <template>
-  <table>
+  <TheLoader v-if="status === 'deleting'" message="Deleting Todo" />
+  <TheLoader v-if="status === 'loading'" />
+  <table v-else>
     <tr>
       <th class="title-header" @click="handleSortChange">
         <span>Title</span>
-        <font-awesome-icon class="sort-icon" :icon="titleSortIcon" />
+        <font-awesome-icon :icon="titleSortIcon" />
       </th>
       <th>Status</th>
       <th>Actions</th>
@@ -99,7 +114,7 @@ onMounted(() => {
         />
         <font-awesome-icon
           class="action-icon"
-          @click="deleteTodo(todo._id)"
+          @click="handleDeleteClick(todo._id)"
           icon="fa-solid fa-trash"
         />
       </td>
@@ -118,6 +133,7 @@ th {
   background-color: purple;
   color: white;
   padding: 5px 0px;
+  font-size: 20px;
 }
 tr:nth-child(even) {
   background-color: rgb(227, 227, 227);
@@ -128,13 +144,11 @@ td {
 }
 
 .title-header {
-  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   cursor: pointer;
-}
-.sort-icon {
-  position: absolute;
-  top: 10px;
-  right: 100px;
 }
 .name-container {
   width: 300px;

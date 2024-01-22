@@ -4,29 +4,34 @@ import useVuelidate from "@vuelidate/core";
 import { BASE_URL, TODO_NAME_RULES } from "../main";
 import axios from "axios";
 import { useRouter } from "vue-router";
+import TheLoader from "./TheLoader.vue";
 
 const formData = ref({ todoName: "" });
+const displayLoader = ref(false);
 
 const router = useRouter();
 
 const validator = useVuelidate(TODO_NAME_RULES, formData);
 
 async function postNewTodo(title: string) {
-  try {
-    await axios.post(BASE_URL, {
-      todoName: title,
-      isComplete: false,
-    });
-  } catch (error) {
-    console.log(error);
-  }
+  await axios.post(BASE_URL, {
+    todoName: title,
+    isComplete: false,
+  });
 }
 
 async function submitForm() {
   validator.value.$touch();
   if (!validator.value.$invalid) {
-    await postNewTodo(formData.value.todoName);
-    router.push("/todos");
+    displayLoader.value = true;
+    try {
+      await postNewTodo(formData.value.todoName);
+      router.push("/todos");
+    } catch (error) {
+      console.log(error);
+    } finally {
+      displayLoader.value = false;
+    }
   }
 }
 </script>
@@ -42,7 +47,8 @@ async function submitForm() {
       <div class="error-message">
         {{ validator?.todoName?.$errors[0]?.$message }}
       </div>
-      <button type="submit">Save Todo</button>
+      <TheLoader v-if="displayLoader" message="Saving Todo" />
+      <button v-else type="submit">Save Todo</button>
     </form>
   </div>
 </template>

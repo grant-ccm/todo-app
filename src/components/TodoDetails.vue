@@ -5,6 +5,7 @@ import useVuelidate from "@vuelidate/core";
 import { required, helpers } from "@vuelidate/validators";
 import { BASE_URL, TODO_NAME_RULES, Todo } from "../main";
 import axios from "axios";
+import TheLoader from "./TheLoader.vue";
 
 type TodoForm = {
   todoName: string;
@@ -15,6 +16,7 @@ type TodoForm = {
 const route = useRoute();
 const router = useRouter();
 
+const displayLoader = ref(true);
 const todo = ref<Todo | undefined>();
 const editingTodo = ref<TodoForm>({
   todoName: "",
@@ -41,31 +43,19 @@ function toggleEditTodo() {
 }
 
 async function getTodoById(id: string) {
-  try {
-    const response = await axios.get(`${BASE_URL}/${id}`);
-    return response.data.data;
-  } catch (error) {
-    console.log(error);
-  }
+  const response = await axios.get(`${BASE_URL}/${id}`);
+  return response.data.data;
 }
 
 async function updateTodo(title: string, complete: boolean) {
-  try {
-    await axios.post(BASE_URL, {
-      todoName: title,
-      isComplete: complete,
-    });
-  } catch (error) {
-    console.log(error);
-  }
+  await axios.post(BASE_URL, {
+    todoName: title,
+    isComplete: complete,
+  });
 }
 
 async function deleteTodo(id: string) {
-  try {
-    await axios.delete(`${BASE_URL}/${id}`);
-  } catch (error) {
-    console.log(error);
-  }
+  await axios.delete(`${BASE_URL}/${id}`);
 }
 
 async function submitForm() {
@@ -76,6 +66,7 @@ async function submitForm() {
     validator.value.$invalid
   )
     return;
+  displayLoader.value = true;
   try {
     await deleteTodo(todo.value._id);
     await updateTodo(editingTodo.value.todoName, editingTodo.value.isComplete);
@@ -83,14 +74,22 @@ async function submitForm() {
     router.replace("/todos");
   } catch (error) {
     console.log(error);
+  } finally {
+    displayLoader.value = false;
   }
 }
 
 onMounted(async () => {
-  const todoId = route.params.id;
-  if (typeof todoId === "string") {
-    const response = await getTodoById(todoId);
-    todo.value = response;
+  try {
+    const todoId = route.params.id;
+    if (typeof todoId === "string") {
+      const response = await getTodoById(todoId);
+      todo.value = response;
+    }
+  } catch (error) {
+    console.log(error);
+  } finally {
+    displayLoader.value = false;
   }
 });
 </script>
@@ -122,7 +121,7 @@ onMounted(async () => {
       <button @click="toggleEditTodo">Edit</button>
     </div>
     <form
-      v-else-if="editingTodo !== null && todo"
+      v-else-if="editingTodo.editing && todo"
       class="detail-container"
       @submit.prevent="submitForm"
     >
@@ -136,20 +135,32 @@ onMounted(async () => {
       <div class="status-container">
         <label>Status:</label>
         <div>
-          <input type="radio" v-model="editingTodo.isComplete" :value="true" />
-          <label>Complete</label>
-          <input type="radio" v-model="editingTodo.isComplete" :value="false" />
-          <label>Incomplete</label>
+          <input
+            type="radio"
+            id="complete"
+            v-model="editingTodo.isComplete"
+            :value="true"
+          />
+          <label for="complete">Complete</label>
+          <input
+            type="radio"
+            id="incomplete"
+            v-model="editingTodo.isComplete"
+            :value="false"
+          />
+          <label for="incomplete">Incomplete</label>
         </div>
         <div class="error-message">
           {{ validator?.isComplete?.$errors[0]?.$message }}
         </div>
       </div>
-      <div class="button-container">
+      <TheLoader v-if="displayLoader" message="Updating Todo" />
+      <div v-else class="button-container">
         <button @click="toggleEditTodo">Cancel</button>
         <button type="submit">Save</button>
       </div>
     </form>
+    <TheLoader v-else-if="displayLoader" />
   </div>
 </template>
 
