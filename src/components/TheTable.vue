@@ -1,25 +1,20 @@
 <script setup lang="ts">
 import { Ref, computed, onMounted, ref } from "vue";
+import { BASE_URL, Todo } from "../main";
 import axios from "axios";
-
-const BASE_URL = "https://calm-plum-jaguar-tutu.cyclic.app/todos";
-
-type Todo = {
-  createdAt: string;
-  isComplete: boolean;
-  todoName: string;
-  updatedAt: string;
-  _id: string;
-};
+import { useRouter } from "vue-router";
+import TheLoader from "./TheLoader.vue";
 
 const props = defineProps<{
   titleFilter: string;
   statusFilter: "all" | "complete" | "incomplete";
 }>();
 
-const todos: Ref<Todo[]> = ref([]);
-const editingTodo: Ref<Todo | null> = ref(null);
-const addingTodo: Ref<string | null> = ref(null);
+const router = useRouter();
+
+const todos = ref<Todo[]>([]);
+const status = ref<"" | "loading" | "deleting">("loading");
+
 const titleSort: Ref<"none" | "asc" | "desc"> = ref("none");
 const titleSortIcon = computed(() =>
   titleSort.value === "none"
@@ -51,87 +46,55 @@ function handleSortChange() {
 const sortedTodos = computed(() =>
   titleSort.value === "none"
     ? filteredTodos.value
-    : filteredTodos.value.toSorted((a, b) => {
-        const aText = a.todoName.toLowerCase();
-        const bText = b.todoName.toLowerCase();
-        if (
-          (aText > bText && titleSort.value === "asc") ||
-          (aText < bText && titleSort.value === "desc")
-        ) {
-          return 1;
-        } else if (
-          (aText < bText && titleSort.value === "asc") ||
-          (aText > bText && titleSort.value === "desc")
-        ) {
-          return -1;
-        } else return 0;
-      })
+    : filteredTodos.value.toSorted((a, b) =>
+        titleSort.value === "asc"
+          ? a.todoName.localeCompare(b.todoName, "en", { sensitivity: "base" })
+          : b.todoName.localeCompare(a.todoName, "en", { sensitivity: "base" })
+      )
 );
 
 async function getTodos() {
+  const response = await axios.get(BASE_URL);
+  return response.data.data;
+}
+
+async function deleteTodo(id: string) {
+  await axios.delete(`${BASE_URL}/${id}`);
+}
+
+async function handleDeleteClick(id: string) {
+  status.value = "deleting";
   try {
-    const response = await axios.get(BASE_URL);
-    todos.value = response.data.data;
+    await deleteTodo(id);
+    const response = await getTodos();
+    todos.value = response;
   } catch (error) {
     console.log(error);
+  } finally {
+    status.value = "";
   }
 }
 
-async function updateTodo(updatedTodo: Todo) {
+onMounted(async () => {
   try {
-    const updatedAt = new Date().toISOString();
-    await axios.put(`${BASE_URL}/${updatedTodo._id}`, {
-      ...updatedTodo,
-      updatedAt,
-    });
+    const response = await getTodos();
+    todos.value = response;
   } catch (error) {
     console.log(error);
+  } finally {
+    status.value = "";
   }
-}
-
-async function deleteTodo(todoId: string) {
-  try {
-    await axios.delete(`${BASE_URL}/${todoId}`);
-    await getTodos();
-  } catch (error) {
-    console.log(error);
-  }
-}
-
-async function postNewTodo() {
-  try {
-    await axios.post(BASE_URL, {
-      todoName: addingTodo.value,
-      isComplete: false,
-    });
-    addingTodo.value = null;
-    await getTodos();
-  } catch (error) {
-    console.log(error);
-  }
-}
-
-async function handleEditClick(todo: Todo) {
-  if (editingTodo.value && editingTodo.value._id === todo._id) {
-    await updateTodo(editingTodo.value);
-    await getTodos();
-    editingTodo.value = null;
-  } else {
-    editingTodo.value = { ...todo };
-  }
-}
-
-onMounted(() => {
-  getTodos();
 });
 </script>
 
 <template>
-  <table>
+  <TheLoader v-if="status === 'deleting'" message="Deleting Todo" />
+  <TheLoader v-if="status === 'loading'" />
+  <table v-else>
     <tr>
       <th class="title-header" @click="handleSortChange">
         <span>Title</span>
-        <font-awesome-icon class="sort-icon" :icon="titleSortIcon" />
+        <font-awesome-icon :icon="titleSortIcon" />
       </th>
       <th>Status</th>
       <th>Actions</th>
@@ -141,76 +104,22 @@ onMounted(() => {
         {{ todo.todoName }}
       </td>
       <td class="complete-container">
-        <template v-if="editingTodo && editingTodo._id === todo._id">
-          <input
-            type="radio"
-            v-model="editingTodo.isComplete"
-            :value="true"
-          />Complete
-          <input
-            type="radio"
-            v-model="editingTodo.isComplete"
-            :value="false"
-          />Incomplete
-        </template>
-        <span v-else>
-          {{ todo.isComplete ? "Complete" : "Incomplete" }}
-        </span>
+        {{ todo.isComplete ? "Complete" : "Incomplete" }}
       </td>
-      <td class="action-container">
-        <template v-if="editingTodo && editingTodo._id === todo._id">
-          <font-awesome-icon
-            class="action-icon"
-            @click="handleEditClick(todo)"
-            icon="fa-solid fa-square-check"
-          />
-          <font-awesome-icon
-            class="action-icon"
-            @click="editingTodo = null"
-            icon="fa-solid fa-square-xmark"
-          />
-        </template>
-        <template v-else>
-          <font-awesome-icon
-            class="action-icon"
-            @click="handleEditClick(todo)"
-            icon="fa-solid fa-pen-to-square"
-          />
-          <font-awesome-icon
-            class="action-icon"
-            @click="deleteTodo(todo._id)"
-            icon="fa-solid fa-trash"
-          />
-        </template>
-      </td>
-    </tr>
-    <tr v-if="addingTodo !== null">
-      <td class="name-container">
-        <input
-          class="name-input"
-          type="text"
-          placeholder="New Todo title..."
-          v-model="addingTodo"
-        />
-      </td>
-      <td class="complete-container">Incomplete</td>
       <td class="action-container">
         <font-awesome-icon
           class="action-icon"
-          @click="postNewTodo"
-          icon="fa-solid fa-square-check"
+          @click="router.push('/todos/' + todo._id)"
+          icon="fa-solid fa-pen-to-square"
         />
         <font-awesome-icon
           class="action-icon"
-          @click="addingTodo = null"
-          icon="fa-solid fa-square-xmark"
+          @click="handleDeleteClick(todo._id)"
+          icon="fa-solid fa-trash"
         />
       </td>
     </tr>
   </table>
-  <button v-if="addingTodo === null" @click="addingTodo = ''">
-    Add New Todo
-  </button>
 </template>
 
 <style scoped>
@@ -224,6 +133,7 @@ th {
   background-color: purple;
   color: white;
   padding: 5px 0px;
+  font-size: 20px;
 }
 tr:nth-child(even) {
   background-color: rgb(227, 227, 227);
@@ -234,13 +144,11 @@ td {
 }
 
 .title-header {
-  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   cursor: pointer;
-}
-.sort-icon {
-  position: absolute;
-  top: 10px;
-  right: 100px;
 }
 .name-container {
   width: 300px;
@@ -256,13 +164,5 @@ td {
 .action-icon {
   margin: 0px 20px;
   cursor: pointer;
-}
-
-.new-todo-container {
-  display: flex;
-}
-
-.name-input {
-  width: 80%;
 }
 </style>
